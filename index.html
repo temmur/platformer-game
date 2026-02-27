@@ -1,0 +1,1041 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Platformer — 5 Levels</title>
+  <style>
+    :root{
+      --bg1:#070a12; --bg2:#0b1630; --panel:#0b1220cc; --stroke:#2a3b63;
+      --text:#e5e7eb; --muted:#a7b0c0; --good:#22c55e; --warn:#f59e0b; --bad:#fb7185;
+    }
+    body{
+      margin:0; height:100vh; display:grid; place-items:center;
+      background: radial-gradient(900px circle at 20% 0%, #243b7a55, transparent 55%),
+                  radial-gradient(900px circle at 80% 0%, #15b9813b, transparent 55%),
+                  radial-gradient(900px circle at 50% 100%, #ec48993a, transparent 60%),
+                  linear-gradient(180deg,var(--bg1),var(--bg2));
+      color:var(--text); font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      overflow:hidden;
+    }
+    .wrap{ width:min(980px, 96vw); }
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin:0 0 10px 0;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px; border:1px solid #2b3a55; border-radius:14px;
+      background: linear-gradient(180deg, #0b1220cc, #0b122099);
+      box-shadow: 0 18px 60px rgba(15,23,42,.35);
+      backdrop-filter: blur(16px);
+    }
+    .dot{ width:10px; height:10px; border-radius:999px; background: var(--good); box-shadow:0 0 18px #22c55eaa; }
+    .meta{ color:var(--muted); font-size:13px; }
+    .hud{
+      display:flex; gap:10px; flex-wrap:wrap;
+      padding:10px 12px; border:1px solid #2b3a55; border-radius:14px;
+      background: var(--panel);
+      box-shadow: 0 18px 60px rgba(15,23,42,.35);
+      backdrop-filter: blur(16px);
+      font-size:14px;
+    }
+    .pill{
+      display:flex; align-items:center; gap:8px;
+      padding:6px 10px; border:1px solid #2b3a55; border-radius:999px;
+      background:#0b1220aa;
+    }
+    canvas{
+      width:100%; height:auto; aspect-ratio: 980 / 560;
+      border-radius:18px; border:1px solid #2b3a55;
+      background: #050814;
+      box-shadow: 0 30px 120px rgba(0,0,0,.55);
+      display:block;
+    }
+    .hint{
+      margin-top:10px;
+      color:var(--muted);
+      font-size:13px;
+      display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    }
+    kbd{
+      padding:.15rem .45rem; border-radius:.45rem;
+      background:#0b1220; border:1px solid #2b3a55; color:#e2e8f0;
+      font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      font-size:12px;
+    }
+    .right{ opacity:.9; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="dot"></div>
+        <div>
+          <div style="font-weight:800; letter-spacing:.2px;">Mini Platformer</div>
+          <div class="meta">5 уровней • монеты • шипы • камера</div>
+        </div>
+      </div>
+
+      <div class="hud" id="hud">
+        <div class="pill">🗺️ Уровень: <b id="lvl">1</b>/5</div>
+        <div class="pill">🪙 Монеты: <b id="coins">0</b>/<span id="coinsTotal">0</span></div>
+        <div class="pill">⭐ Очки: <b id="score">0</b></div>
+        <div class="pill">❤️ Жизни: <b id="lives">3</b></div>
+      </div>
+    </div>
+
+    <canvas id="game" width="980" height="560"></canvas>
+
+    <div class="hint">
+      <div>
+        Управление: <kbd>A</kbd>/<kbd>D</kbd> или <kbd>←</kbd>/<kbd>→</kbd> • Прыжок: <kbd>W</kbd>/<kbd>Space</kbd>/<kbd>↑</kbd>
+        • Рестарт уровня: <kbd>R</kbd> • Пауза: <kbd>P</kbd>
+      </div>
+      <div class="right">Цель: собери все монеты и дойди до флага ✅</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  // HUD
+  const elLvl = document.getElementById("lvl");
+  const elCoins = document.getElementById("coins");
+  const elCoinsTotal = document.getElementById("coinsTotal");
+  const elScore = document.getElementById("score");
+  const elLives = document.getElementById("lives");
+
+  // Input
+  const keys = new Set();
+  addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
+  });
+  addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+  // Physics tuning
+  const G = 0.85;
+  const MOVE = 1.15;
+  const JUMP = 16;
+  const MAX_VX = 10;
+  const MAX_VY = 24;
+  const FRICTION_GROUND = 0.80;
+  const FRICTION_AIR = 0.92;
+
+  // Camera smoothing
+  const cam = { x: 0, y: 0, targetX: 0, targetY: 0 };
+
+  // Particles
+  const particles = [];
+  function spawnParticles(x, y, n, kind="coin") {
+    for (let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2;
+      const s = 1.5 + Math.random()*3.2;
+      particles.push({
+        x, y,
+        vx: Math.cos(a)*s,
+        vy: Math.sin(a)*s - 2.5,
+        life: 32 + Math.random()*18,
+        kind
+      });
+    }
+  }
+
+  // Helpers
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a,b,t) => a + (b-a)*t;
+
+  function aabb(a, b){
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  // Level generator (5 levels)
+  // World is wider than canvas -> camera moves.
+  const levels = [
+    // Level 1 (easy)
+    {
+      worldW: 2200,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 2050, y: 320, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:2200,h:60},
+        {x:260,y:420,w:180,h:18},
+        {x:520,y:380,w:200,h:18},
+        {x:820,y:340,w:200,h:18},
+        {x:1160,y:380,w:200,h:18},
+        {x:1460,y:330,w:220,h:18},
+        {x:1760,y:410,w:180,h:18},
+      ],
+      spikes: [
+        {x:720,y:482,w:70,h:18},
+        {x:1560,y:482,w:90,h:18},
+      ],
+      coins: [
+        {x:300,y:380},{x:580,y:340},{x:860,y:300},
+        {x:1200,y:340},{x:1500,y:290},{x:1790,y:370}
+      ]
+    },
+
+    // Level 2
+    {
+      worldW: 2500,
+      spawn: { x: 80, y: 350 },
+      goal:  { x: 2340, y: 260, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:2500,h:60},
+        {x:220,y:410,w:160,h:18},
+        {x:460,y:330,w:160,h:18},
+        {x:720,y:270,w:150,h:18},
+        {x:980,y:320,w:160,h:18},
+        {x:1260,y:380,w:180,h:18},
+        {x:1560,y:330,w:180,h:18},
+        {x:1860,y:280,w:180,h:18},
+        {x:2100,y:340,w:160,h:18},
+      ],
+      spikes: [
+        {x:380,y:482,w:70,h:18},
+        {x:1130,y:482,w:110,h:18},
+        {x:1700,y:482,w:120,h:18},
+      ],
+      coins: [
+        {x:260,y:370},{x:500,y:290},{x:760,y:230},
+        {x:1010,y:280},{x:1300,y:340},{x:1600,y:290},
+        {x:1890,y:240},{x:2140,y:300}
+      ]
+    },
+
+    // Level 3 (more vertical)
+    {
+      worldW: 2600,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 2440, y: 160, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:2600,h:60},
+        {x:240,y:410,w:170,h:18},
+        {x:520,y:350,w:170,h:18},
+        {x:800,y:290,w:170,h:18},
+        {x:1080,y:230,w:170,h:18},
+        {x:1360,y:280,w:170,h:18},
+        {x:1640,y:340,w:170,h:18},
+        {x:1920,y:280,w:170,h:18},
+        {x:2200,y:220,w:220,h:18},
+      ],
+      spikes: [
+        {x:640,y:482,w:120,h:18},
+        {x:1480,y:482,w:150,h:18},
+        {x:2060,y:482,w:140,h:18},
+      ],
+      coins: [
+        {x:270,y:370},{x:550,y:310},{x:830,y:250},
+        {x:1110,y:190},{x:1390,y:240},{x:1670,y:300},
+        {x:1950,y:240},{x:2250,y:180},{x:2350,y:180}
+      ]
+    },
+
+    // Level 4 (tight platforms)
+    {
+      worldW: 2800,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 2640, y: 320, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:2800,h:60},
+        {x:240,y:420,w:120,h:18},
+        {x:420,y:360,w:120,h:18},
+        {x:600,y:300,w:120,h:18},
+        {x:780,y:360,w:120,h:18},
+        {x:960,y:420,w:120,h:18},
+        {x:1180,y:380,w:140,h:18},
+        {x:1420,y:330,w:140,h:18},
+        {x:1660,y:280,w:140,h:18},
+        {x:1900,y:330,w:140,h:18},
+        {x:2140,y:380,w:140,h:18},
+        {x:2380,y:420,w:140,h:18},
+      ],
+      spikes: [
+        {x:330,y:482,w:80,h:18},
+        {x:690,y:482,w:120,h:18},
+        {x:1050,y:482,w:120,h:18},
+        {x:1560,y:482,w:160,h:18},
+        {x:2100,y:482,w:140,h:18},
+      ],
+      coins: [
+        {x:260,y:380},{x:440,y:320},{x:620,y:260},
+        {x:800,y:320},{x:980,y:380},
+        {x:1210,y:340},{x:1450,y:290},{x:1690,y:240},
+        {x:1930,y:290},{x:2170,y:340},{x:2410,y:380}
+      ]
+    },
+
+    // Level 5 (final)
+    {
+      worldW: 3000,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 2840, y: 180, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:3000,h:60},
+        {x:240,y:410,w:200,h:18},
+        {x:520,y:360,w:180,h:18},
+        {x:780,y:310,w:160,h:18},
+        {x:1020,y:260,w:160,h:18},
+        {x:1260,y:310,w:160,h:18},
+        {x:1500,y:360,w:160,h:18},
+        {x:1740,y:410,w:180,h:18},
+        {x:2040,y:360,w:180,h:18},
+        {x:2300,y:300,w:180,h:18},
+        {x:2560,y:240,w:220,h:18},
+      ],
+      spikes: [
+        {x:460,y:482,w:140,h:18},
+        {x:900,y:482,w:200,h:18},
+        {x:1400,y:482,w:220,h:18},
+        {x:1900,y:482,w:220,h:18},
+        {x:2440,y:482,w:240,h:18},
+      ],
+      coins: [
+        {x:280,y:370},{x:560,y:320},{x:810,y:270},{x:1050,y:220},
+        {x:1290,y:270},{x:1530,y:320},{x:1770,y:370},
+        {x:2070,y:320},{x:2330,y:260},{x:2600,y:200},{x:2700,y:200}
+      ]
+    }
+  ];
+
+  // State
+  const state = {
+    levelIndex: 0,
+    score: 0,
+    lives: 3,
+    paused: false,
+    message: null,
+    messageTimer: 0,
+    coinsCollected: 0,
+    coinsTotal: 0,
+    levelWon: false,
+    finished: false,
+
+      transitioning: false,
+      nextTimer: null,
+  };
+
+  // Player
+  const player = {
+    x: 0, y: 0, w: 34, h: 46,
+    vx: 0, vy: 0,
+    onGround: false,
+    coyote: 0,    // small forgiveness
+    jumpBuf: 0,   // jump buffering
+    respawnLock: 0
+  };
+
+    // function loadLevel(i){
+    //     // ✅ cancel any pending next-level timer
+    //     if (state.nextTimer) {
+    //         clearTimeout(state.nextTimer);
+    //         state.nextTimer = null;
+    //     }
+    //     state.transitioning = false;
+    //
+    //     // ✅ guard: invalid index -> restart safely
+    //     if (i < 0 || i >= levels.length) {
+    //         state.finished = true;
+    //         showMessage("Нет такого уровня. Нажми R чтобы начать заново.", 180);
+    //         return;
+    //     }
+    //
+    //     state.levelIndex = i;
+    //     const L = levels[i];
+    //
+    //     player.x = L.spawn.x;
+    //     player.y = L.spawn.y;
+    //     player.vx = 0;
+    //     player.vy = 0;
+    //     player.onGround = false;
+    //     player.coyote = 0;
+    //     player.jumpBuf = 0;
+    //     player.respawnLock = 20;
+    //
+    //     // coins clone
+    //     L._coins = L.coins.map(c => ({ x:c.x, y:c.y, r:10, taken:false }));
+    //     state.coinsCollected = 0;
+    //     state.coinsTotal = L._coins.length;
+    //
+    //     // enemies clone
+    //     L._enemies = L.enemies.map(e => ({ ...e, alive:true, hurtCd:0 }));
+    //
+    //     cam.x = clamp(player.x - canvas.width/2, 0, L.worldW - canvas.width);
+    //     cam.targetX = cam.x;
+    //
+    //     updateHUD();
+    //     showMessage(`Уровень ${i+1}: монеты + враги (длинный)`, 140);
+    // }
+
+    function loadLevel(i){
+        // ✅ cancel any pending next-level timer
+        if (state.nextTimer) {
+            clearTimeout(state.nextTimer);
+            state.nextTimer = null;
+        }
+        state.transitioning = false;
+
+        // ✅ guard: invalid index
+        if (i < 0 || i >= levels.length) {
+            state.finished = true;
+            showMessage("Нет такого уровня. Нажми R чтобы начать заново.", 180);
+            return;
+        }
+
+        state.levelIndex = i;
+        const L = levels[i];
+
+        // ✅ safety: ensure arrays exist (so .map never crashes)
+        if (!Array.isArray(L.platforms)) L.platforms = [];
+        if (!Array.isArray(L.spikes)) L.spikes = [];
+        if (!Array.isArray(L.coins)) L.coins = [];
+        if (!Array.isArray(L.enemies)) L.enemies = [];
+
+        player.x = L.spawn?.x ?? 50;
+        player.y = L.spawn?.y ?? 300;
+        player.vx = 0;
+        player.vy = 0;
+        player.onGround = false;
+        player.coyote = 0;
+        player.jumpBuf = 0;
+        player.respawnLock = 20;
+
+        // coins clone
+        L._coins = L.coins.map(c => ({ x:c.x, y:c.y, r:10, taken:false }));
+        state.coinsCollected = 0;
+        state.coinsTotal = L._coins.length;
+
+        // enemies clone
+        L._enemies = L.enemies.map(e => ({ ...e, alive:true, hurtCd:0 }));
+
+        cam.x = clamp(player.x - canvas.width/2, 0, (L.worldW ?? canvas.width) - canvas.width);
+        cam.targetX = cam.x;
+
+        updateHUD();
+        showMessage(`Уровень ${i+1}: монеты + враги (длинный)`, 140);
+    }
+  function updateHUD(){
+    elLvl.textContent = String(state.levelIndex+1);
+    elCoins.textContent = String(state.coinsCollected);
+    elCoinsTotal.textContent = String(state.coinsTotal);
+    elScore.textContent = String(state.score);
+    elLives.textContent = String(state.lives);
+  }
+
+  function showMessage(text, frames=120){
+    state.message = text;
+    state.messageTimer = frames;
+  }
+
+    function loseLife(reason="Осторожно!"){
+        // ✅ если был запланирован переход на следующий уровень — отменяем
+        if (state.nextTimer) {
+            clearTimeout(state.nextTimer);
+            state.nextTimer = null;
+        }
+        // ✅ сбрасываем режим перехода
+        state.transitioning = false;
+
+        if (player.respawnLock > 0) return;
+
+        state.lives -= 1;
+        updateHUD();
+        spawnParticles(player.x + player.w/2, player.y + player.h/2, 26, "hit");
+        showMessage(reason + (state.lives > 0 ? " Минус жизнь ❤️" : " Игра окончена 💀"), 140);
+
+        if (state.lives <= 0){
+            // ✅ Restart whole game
+            state.lives = 3;
+            state.score = 0;
+            loadLevel(0);
+            showMessage("Игра заново! Попробуй ещё раз 💪", 140);
+            return;
+        }
+
+        // ✅ restart current level (берём текущий индекс безопасно)
+        const current = state.levelIndex;
+        loadLevel(current);
+    }
+
+    function winLevel(){
+        if (state.transitioning || state.finished) return;
+        state.transitioning = true;
+
+        const current = state.levelIndex;
+        const nextIndex = current + 1; // ✅ capture once
+
+        spawnParticles(levels[current].goal.x, levels[current].goal.y, 40, "win");
+
+        if (nextIndex < levels.length){
+            showMessage("Уровень пройден! ➜ следующий!", 140);
+
+            // ✅ store timer id + use captured nextIndex
+            state.nextTimer = setTimeout(() => {
+                state.nextTimer = null;
+                loadLevel(nextIndex);
+            }, 650);
+
+        } else {
+            state.finished = true;
+            showMessage("ФИНАЛ: ты прошёл все уровни! 🏆", 220);
+            state.transitioning = false;
+        }
+    }
+
+  // Collision resolution with platforms
+  function resolvePlatformCollision(p, plat){
+    if (!aabb(p, plat)) return;
+
+    const prev = { x: p.x - p.vx, y: p.y - p.vy, w: p.w, h: p.h };
+
+    // land on top
+    if (prev.y + prev.h <= plat.y){
+      p.y = plat.y - p.h;
+      p.vy = 0;
+      p.onGround = true;
+      p.coyote = 8;
+      return;
+    }
+    // hit from below
+    if (prev.y >= plat.y + plat.h){
+      p.y = plat.y + plat.h;
+      p.vy = 0;
+      return;
+    }
+    // left/right
+    if (prev.x + prev.w <= plat.x){
+      p.x = plat.x - p.w;
+      p.vx = 0;
+      return;
+    }
+    if (prev.x >= plat.x + plat.w){
+      p.x = plat.x + plat.w;
+      p.vx = 0;
+      return;
+    }
+  }
+
+  // spikes are hazards
+  function spikeRect(s){
+    // s is area on ground; treat as rectangle near top
+    return { x:s.x, y:s.y, w:s.w, h:s.h };
+  }
+
+  // coin pickup
+  function pickupCoin(coin){
+    coin.taken = true;
+    state.coinsCollected += 1;
+    state.score += 10;
+    updateHUD();
+    spawnParticles(coin.x, coin.y, 18, "coin");
+  }
+
+  function allCoinsTaken(){
+    const L = levels[state.levelIndex];
+    return L._coins.every(c => c.taken);
+  }
+
+  // Drawing helpers (nice visuals)
+  function drawRoundedRect(x,y,w,h,r){
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function worldToScreenX(x){ return x - cam.x; }
+  function worldToScreenY(y){ return y - cam.y; }
+
+  function drawBackground(){
+    // parallax grid + stars
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // gradient
+    const g = ctx.createLinearGradient(0,0,0,canvas.height);
+    g.addColorStop(0,"#050814");
+    g.addColorStop(1,"#070a12");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // stars (parallax)
+    ctx.globalAlpha = 0.5;
+    for (let i=0;i<110;i++){
+      const x = ((i*173) % canvas.width) + (-(cam.x*0.15) % canvas.width);
+      const y = ((i*97) % canvas.height);
+      ctx.fillStyle = (i%3===0) ? "#93c5fd" : "#e9d5ff";
+      ctx.fillRect((x+canvas.width)%canvas.width, y, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // soft clouds shapes
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = "#60a5fa";
+    for (let i=0;i<6;i++){
+      const x = (i*220 - (cam.x*0.22)%220) - 80;
+      const y = 80 + (i%2)*35;
+      ctx.beginPath();
+      ctx.ellipse(x+120, y, 110, 35, 0, 0, Math.PI*2);
+      ctx.ellipse(x+190, y+10, 80, 28, 0, 0, Math.PI*2);
+      ctx.ellipse(x+70, y+12, 70, 26, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // grid
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 1;
+    const step = 44;
+    const offsetX = -((cam.x*0.35) % step);
+    for (let x=offsetX; x<canvas.width; x+=step){
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke();
+    }
+    for (let y=0; y<canvas.height; y+=step){
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPlatform(p){
+    const x = worldToScreenX(p.x);
+    const y = worldToScreenY(p.y);
+
+    // shadow
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#000000";
+    drawRoundedRect(x, y+6, p.w, p.h, 10);
+    ctx.globalAlpha = 1;
+
+    // body gradient
+    const grad = ctx.createLinearGradient(0,y,0,y+p.h);
+    grad.addColorStop(0,"#182647");
+    grad.addColorStop(1,"#0b1220");
+    ctx.fillStyle = grad;
+    drawRoundedRect(x, y, p.w, p.h, 10);
+
+    // top highlight
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#93c5fd";
+    drawRoundedRect(x+6, y+3, p.w-12, Math.max(3, p.h*0.22), 8);
+    ctx.globalAlpha = 1;
+
+    // stroke
+    ctx.strokeStyle = "#2b3a55";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x+1, y+1, p.w-2, p.h-2);
+  }
+
+  function drawSpikes(s){
+    const r = spikeRect(s);
+    const x = worldToScreenX(r.x);
+    const y = worldToScreenY(r.y);
+    const w = r.w;
+    const h = r.h;
+
+    // base
+    ctx.fillStyle = "#0b1220";
+    ctx.fillRect(x, y, w, h);
+
+    // spikes triangles
+    const count = Math.max(2, Math.floor(w / 14));
+    const step = w / count;
+    for (let i=0;i<count;i++){
+      const tx = x + i*step;
+      ctx.beginPath();
+      ctx.moveTo(tx, y+h);
+      ctx.lineTo(tx+step/2, y);
+      ctx.lineTo(tx+step, y+h);
+      ctx.closePath();
+      ctx.fillStyle = "#fb7185";
+      ctx.fill();
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(tx+step/2-1, y+3, 2, h-6);
+      ctx.globalAlpha = 1;
+    }
+
+    // glow
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = "#fb7185";
+    ctx.fillRect(x, y-6, w, 6);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawCoin(c){
+    const x = worldToScreenX(c.x);
+    const y = worldToScreenY(c.y);
+
+    // floating animation
+    const bob = Math.sin((performance.now()/250) + c.x*0.01) * 3;
+
+    // glow
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#fbbf24";
+    ctx.beginPath();
+    ctx.arc(x, y + bob, 18, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // coin body
+    const grad = ctx.createRadialGradient(x-4, y-6 + bob, 2, x, y + bob, 12);
+    grad.addColorStop(0, "#fff7d1");
+    grad.addColorStop(0.45, "#fbbf24");
+    grad.addColorStop(1, "#b45309");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y + bob, 11, 0, Math.PI*2);
+    ctx.fill();
+
+    // inner
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = "#fff7d1";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y + bob, 6, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGoal(goal, open){
+    const x = worldToScreenX(goal.x);
+    const y = worldToScreenY(goal.y);
+
+    // pole
+    ctx.fillStyle = "#e5e7eb";
+    ctx.fillRect(x, y, 5, goal.h);
+
+    // flag
+    ctx.beginPath();
+    ctx.moveTo(x+5, y+10);
+    ctx.quadraticCurveTo(x+18, y+18, x+goal.w+10, y+24);
+    ctx.quadraticCurveTo(x+18, y+30, x+5, y+38);
+    ctx.closePath();
+
+    const flagGrad = ctx.createLinearGradient(x, y, x+goal.w+10, y);
+    flagGrad.addColorStop(0, open ? "#22c55e" : "#94a3b8");
+    flagGrad.addColorStop(1, "#0b1220");
+    ctx.fillStyle = flagGrad;
+    ctx.fill();
+
+    // small glow when open
+    if (open){
+      ctx.globalAlpha = 0.20;
+      ctx.fillStyle = "#22c55e";
+      ctx.fillRect(x-12, y-12, 60, goal.h+24);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawPlayer(){
+    const x = worldToScreenX(player.x);
+    const y = worldToScreenY(player.y);
+
+    // shadow
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(x+player.w/2, (levels[state.levelIndex].platforms[0].y - cam.y) + 10, 18, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // body
+    const grad = ctx.createLinearGradient(0,y,0,y+player.h);
+    grad.addColorStop(0, "#fbbf24");
+    grad.addColorStop(1, "#f59e0b");
+    ctx.fillStyle = grad;
+    drawRoundedRect(x, y, player.w, player.h, 10);
+
+    // face
+    ctx.fillStyle = "#111827";
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(x+9, y+14, 6, 6);
+    ctx.fillRect(x+19, y+14, 6, 6);
+    ctx.globalAlpha = 1;
+
+    // tiny highlight
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#ffffff";
+    drawRoundedRect(x+5, y+5, player.w-10, 8, 8);
+    ctx.globalAlpha = 1;
+
+    // trail particles when moving fast
+    if (Math.abs(player.vx) > 6 && player.onGround){
+      spawnParticles(player.x + player.w/2, player.y + player.h, 1, "dust");
+    }
+  }
+
+  function drawParticles(){
+    for (let i=particles.length-1; i>=0; i--){
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.92;
+      p.vy += 0.35;
+      p.life -= 1;
+
+      const sx = worldToScreenX(p.x);
+      const sy = worldToScreenY(p.y);
+
+      let a = clamp(p.life / 50, 0, 1);
+      ctx.globalAlpha = a;
+
+      if (p.kind === "coin"){
+        ctx.fillStyle = "#fbbf24";
+        ctx.fillRect(sx, sy, 3, 3);
+      } else if (p.kind === "hit"){
+        ctx.fillStyle = "#fb7185";
+        ctx.fillRect(sx, sy, 3, 3);
+      } else if (p.kind === "win"){
+        ctx.fillStyle = "#22c55e";
+        ctx.fillRect(sx, sy, 3, 3);
+      } else {
+        ctx.fillStyle = "#94a3b8";
+        ctx.fillRect(sx, sy, 2, 2);
+      }
+
+      ctx.globalAlpha = 1;
+
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  function drawMessage(){
+    if (!state.message || state.messageTimer <= 0) return;
+    state.messageTimer--;
+
+    const text = state.message;
+    const w = Math.min(canvas.width-40, 760);
+    const x = (canvas.width - w)/2;
+    const y = 20;
+
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "#0b1220cc";
+    drawRoundedRect(x, y, w, 52, 16);
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = "#2b3a55";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x+1, y+1, w-2, 50);
+
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "700 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(text, canvas.width/2, y + 33);
+    ctx.textAlign = "left";
+  }
+
+  function drawOverlayWin(){
+    if (!state.finished) return;
+    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = "#22c55e";
+    ctx.font = "900 54px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("🏆 YOU FINISHED!", canvas.width/2, 260);
+
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    ctx.fillText(`Очки: ${state.score} • Нажми R чтобы начать заново`, canvas.width/2, 300);
+    ctx.textAlign = "left";
+  }
+
+  // Update
+  function step(){
+    const L = levels[state.levelIndex];
+
+    // pause toggle
+    if (keys.has("p")) {
+      keys.delete("p");
+      state.paused = !state.paused;
+      showMessage(state.paused ? "Пауза ⏸" : "Продолжаем ▶", 90);
+    }
+
+    if (keys.has("r")){
+      keys.delete("r");
+      loadLevel(state.levelIndex);
+      showMessage("Уровень перезапущен 🔁", 90);
+    }
+
+    if (state.finished){
+      // allow restart full game
+      if (keys.has("r")){
+        keys.delete("r");
+        state.finished = false;
+        state.score = 0;
+        state.lives = 3;
+        loadLevel(0);
+      }
+      return;
+    }
+
+    if (state.paused) return;
+
+    if (player.respawnLock > 0) player.respawnLock--;
+
+    // input
+    const left = keys.has("a") || keys.has("arrowleft");
+    const right = keys.has("d") || keys.has("arrowright");
+    const jump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
+
+    if (jump) player.jumpBuf = 8;
+    else player.jumpBuf = Math.max(0, player.jumpBuf - 1);
+
+    if (left) player.vx -= MOVE;
+    if (right) player.vx += MOVE;
+
+    // gravity
+    player.vy += G;
+
+    // friction
+    player.vx *= player.onGround ? FRICTION_GROUND : FRICTION_AIR;
+
+    // clamp
+    player.vx = clamp(player.vx, -MAX_VX, MAX_VX);
+    player.vy = clamp(player.vy, -MAX_VY, MAX_VY);
+
+    // move
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // world bounds
+    player.x = clamp(player.x, 0, L.worldW - player.w);
+
+    // collisions
+    player.onGround = false;
+
+    for (const p of L.platforms) resolvePlatformCollision(player, p);
+
+    // coyote time
+    if (player.onGround) player.coyote = 8;
+    else player.coyote = Math.max(0, player.coyote - 1);
+
+    // jump consume (buffer + coyote)
+    if (player.jumpBuf > 0 && player.coyote > 0){
+      player.vy = -JUMP;
+      player.jumpBuf = 0;
+      player.coyote = 0;
+      spawnParticles(player.x + player.w/2, player.y + player.h, 10, "dust");
+    }
+
+    // spikes collision
+    for (const s of L.spikes){
+      const r = spikeRect(s);
+      if (aabb(player, r)){
+        loseLife("Шипы!");
+        return;
+      }
+    }
+
+    // coins
+    for (const c of L._coins){
+      if (c.taken) continue;
+      const coinBox = { x:c.x - c.r, y:c.y - c.r, w:c.r*2, h:c.r*2 };
+      if (aabb(player, coinBox)){
+        pickupCoin(c);
+      }
+    }
+
+    // fall off => lose life
+    if (player.y > canvas.height + 300){
+      loseLife("Упал!");
+      return;
+    }
+
+    // goal check (only if all coins)
+    const canFinish = allCoinsTaken();
+    const goal = L.goal;
+    if (canFinish && aabb(player, goal)){
+      // bonus
+      state.score += 50;
+      updateHUD();
+      winLevel();
+      return;
+    }
+
+    // camera follow
+    cam.targetX = clamp(player.x + player.w/2 - canvas.width/2, 0, L.worldW - canvas.width);
+    cam.x = lerp(cam.x, cam.targetX, 0.10);
+
+    // tiny score for moving right (fun)
+    if (player.vx > 3 && Math.random() < 0.02) state.score += 1;
+    elScore.textContent = String(state.score);
+  }
+
+  // Render
+  function render(){
+    const L = levels[state.levelIndex];
+
+    drawBackground();
+
+    // ground decorations: distant hills (parallax)
+    ctx.globalAlpha = 0.20;
+    ctx.fillStyle = "#1d2a55";
+    const hillOffset = -((cam.x*0.18) % 360);
+    for (let i=0;i<8;i++){
+      const x = hillOffset + i*360;
+      ctx.beginPath();
+      ctx.ellipse(x+150, 520, 200, 80, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // platforms
+    for (const p of L.platforms) drawPlatform(p);
+
+    // spikes
+    for (const s of L.spikes) drawSpikes(s);
+
+    // coins
+    for (const c of L._coins){
+      if (!c.taken) drawCoin(c);
+    }
+
+    // goal (open when all coins taken)
+    drawGoal(L.goal, allCoinsTaken());
+
+    // player
+    drawPlayer();
+
+    // particles
+    drawParticles();
+
+    // helper text inside game
+    ctx.fillStyle = "#a7b0c0";
+    ctx.font = "600 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    const need = state.coinsTotal - state.coinsCollected;
+    const hint = allCoinsTaken()
+      ? "Флаг открыт! Беги к нему ✅"
+      : `Собери ещё монет: ${need} 🪙`;
+    ctx.fillText(hint, 18, canvas.height - 18);
+
+    drawMessage();
+    drawOverlayWin();
+  }
+
+  function loop(){
+    step();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // Start
+  loadLevel(0);
+  loop();
+})();
+</script>
+</body>
+</html>
