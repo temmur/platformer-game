@@ -230,13 +230,20 @@
   const MAX_VY = 24;
   const FRICTION_GROUND = 0.80;
   const FRICTION_AIR = 0.92;
+  const CHAIN_G = 0.015;
+  const CHAIN_DAMP_FREE = 0.990;
+  const CHAIN_DAMP_GRAB = 0.996;
+  const CHAIN_MAX_ANGLE = 0.9;
+  const CHAIN_MAX_AVEL = 0.08;
+  const CHAIN_INPUT = 0.004;
+  const CHAIN_RELEASE_BOOST = 6;
 
   // Camera smoothing
   const cam = { x: 0, y: 0, targetX: 0, targetY: 0 };
 
   // Particles
   const particles = [];
-  function spawnParticles(x, y, n, kind="coin", color=null) {
+  function spawnParticles(x, y, n, kind="coin", color=null, meta=null) {
     for (let i=0;i<n;i++){
       const a = Math.random()*Math.PI*2;
       const s = 1.5 + Math.random()*3.2;
@@ -246,7 +253,9 @@
         vy: Math.sin(a)*s - 2.5,
         life: 32 + Math.random()*18,
         kind,
-        color
+        color,
+        color2: meta?.color2 ?? null,
+        size: meta?.size ?? null
       });
     }
   }
@@ -347,6 +356,13 @@
         {x:1110,y:190},{x:1390,y:240},{x:1670,y:300},
         {x:1950,y:240},{x:2250,y:180},{x:2350,y:180}
       ],
+      rings: [
+        {x:820,y:230,r:16},
+        {x:1670,y:260,r:16},
+      ],
+      chains: [
+        {x:1200,y:140,h:220},
+      ],
       enemies: [
         {type:"patrol", x:620, y:472, w:36, h:28, minX:520, maxX:880, speed:1.55},
         {type:"patrol", x:1500, y:472, w:36, h:28, minX:1380, maxX:1780, speed:1.4},
@@ -421,6 +437,13 @@
         {x:1290,y:270},{x:1530,y:320},{x:1770,y:370},
         {x:2070,y:320},{x:2330,y:260},{x:2600,y:200},{x:2700,y:200}
       ],
+      rings: [
+        {x:1020,y:230,r:16},
+        {x:2040,y:300,r:16},
+      ],
+      chains: [
+        {x:1500,y:200,h:200},
+      ],
       enemies: [
         {type:"patrol", x:880, y:472, w:36, h:28, minX:760, maxX:1120, speed:1.7},
         {type:"patrol", x:1760, y:472, w:36, h:28, minX:1600, maxX:2100, speed:1.8},
@@ -456,6 +479,13 @@
         {x:300,y:380},{x:580,y:340},{x:860,y:300},
         {x:1140,y:260},{x:1420,y:300},{x:1700,y:340},
         {x:1980,y:380},{x:2260,y:340},{x:2540,y:300},{x:2820,y:260}
+      ],
+      rings: [
+        {x:1100,y:260,r:16},
+        {x:2260,y:300,r:16},
+      ],
+      chains: [
+        {x:1760,y:240,h:220},
       ],
       enemies: [
         {type:"patrol", x:520, y:472, w:36, h:28, minX:380, maxX:720, speed:1.6},
@@ -528,6 +558,13 @@
         {x:320,y:390},{x:640,y:330},{x:960,y:270},{x:1280,y:330},
         {x:1600,y:390},{x:1920,y:330},{x:2240,y:270},{x:2560,y:330},{x:2880,y:390}
       ],
+      rings: [
+        {x:1240,y:300,r:16},
+        {x:2200,y:260,r:16},
+      ],
+      chains: [
+        {x:1800,y:180,h:240},
+      ],
       enemies: [
         {type:"patrol", x:740, y:472, w:36, h:28, minX:620, maxX:980, speed:2.1},
         {type:"patrol", x:1700, y:472, w:36, h:28, minX:1500, maxX:1980, speed:2.0},
@@ -566,6 +603,14 @@
         {x:1200,y:190},{x:1500,y:250},{x:1800,y:320},
         {x:2100,y:390},{x:2400,y:320},{x:2700,y:250},{x:3000,y:190},{x:3300,y:250}
       ],
+      rings: [
+        {x:1160,y:210,r:16},
+        {x:2660,y:260,r:16},
+      ],
+      chains: [
+        {x:1460,y:160,h:240},
+        {x:2960,y:160,h:240},
+      ],
       enemies: [
         {type:"patrol", x:980, y:472, w:36, h:28, minX:860, maxX:1220, speed:2.2},
         {type:"patrol", x:1880, y:472, w:36, h:28, minX:1680, maxX:2100, speed:2.1},
@@ -600,6 +645,15 @@
       coins: [
         {x:320,y:390},{x:640,y:330},{x:980,y:270},{x:1320,y:330},
         {x:1660,y:390},{x:2020,y:330},{x:2380,y:270},{x:2740,y:330},{x:3100,y:390},{x:3400,y:330}
+      ],
+      rings: [
+        {x:940,y:300,r:18},
+        {x:2020,y:320,r:18},
+        {x:3100,y:360,r:18},
+      ],
+      chains: [
+        {x:1620,y:160,h:260},
+        {x:2700,y:160,h:260},
       ],
       enemies: [
         {type:"patrol", x:860, y:472, w:36, h:28, minX:700, maxX:1080, speed:2.0},
@@ -643,12 +697,18 @@
     { id:"neon", name:"Неон", price:80, top:"#22d3ee", bottom:"#06b6d4", eye:"#0f172a" },
     { id:"mint", name:"Мята", price:120, top:"#34d399", bottom:"#10b981", eye:"#052e2b" },
     { id:"dusk", name:"Сумрак", price:150, top:"#a78bfa", bottom:"#7c3aed", eye:"#0f172a" },
+    { id:"crimson", name:"Кримсон", price:180, top:"#f43f5e", bottom:"#be123c", eye:"#0f172a" },
+    { id:"galaxy", name:"Галактика", price:220, top:"#38bdf8", bottom:"#1e1b4b", eye:"#0f172a" },
+    { id:"gold", name:"Золото", price:260, top:"#fde047", bottom:"#b45309", eye:"#111827" },
   ];
   const trails = [
     { id:"none", name:"Без следа", price:0, kind:"none", color:"#94a3b8" },
     { id:"spark", name:"Искры", price:90, kind:"trail", color:"#fbbf24" },
     { id:"ember", name:"Угли", price:120, kind:"trail", color:"#fb7185" },
     { id:"azure", name:"Азур", price:150, kind:"trail", color:"#60a5fa" },
+    { id:"minty", name:"Мятный след", price:170, kind:"trail", color:"#34d399" },
+    { id:"violet", name:"Фиал", price:200, kind:"trail", color:"#a78bfa" },
+    { id:"crimson", name:"Рубин", price:230, kind:"ruby", color:"#f43f5e", color2:"#fecdd3", size:5 },
   ];
 
   function loadJSON(key, fallback){
@@ -690,7 +750,10 @@
     onGround: false,
     coyote: 0,    // small forgiveness
     jumpBuf: 0,   // jump buffering
-    respawnLock: 0
+    respawnLock: 0,
+    grabbed: -1,
+    grabT: 1,
+    chainCooldown: 0
   };
 
     // function loadLevel(i){
@@ -767,11 +830,25 @@
         player.coyote = 0;
         player.jumpBuf = 0;
         player.respawnLock = 20;
+        player.grabbed = -1;
+        player.grabT = 1;
+        player.chainCooldown = 0;
 
         // coins clone
         L._coins = L.coins.map(c => ({ x:c.x, y:c.y, r:10, taken:false }));
         state.coinsCollected = 0;
         state.coinsTotal = L._coins.length;
+
+        // rings + chains clone
+        L._rings = (L.rings || []).map(r => ({ ...r, cooldown:0 }));
+        L._chains = (L.chains || []).map(c => ({
+          ...c,
+          baseX: c.x,
+          baseY: c.y,
+          length: c.h || 140,
+          angle: (Math.random()*0.6 - 0.3),
+          avel: 0
+        }));
 
         // enemies clone
         L._enemies = L.enemies.map(e => ({ ...e, alive:true, hurtCd:0 }));
@@ -1037,6 +1114,70 @@
     ctx.globalAlpha = 1;
   }
 
+  function drawRing(r){
+    const x = worldToScreenX(r.x);
+    const y = worldToScreenY(r.y);
+    const rad = r.r || 16;
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = "#fbbf24";
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(x, y, rad+6, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#fde047";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#f59e0b";
+    ctx.beginPath();
+    ctx.arc(x, y, rad-6, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function chainEnd(c){
+    const x = c.baseX + Math.sin(c.angle) * c.length;
+    const y = c.baseY + Math.cos(c.angle) * c.length;
+    return { x, y };
+  }
+
+  function drawChain(c){
+    const baseX = worldToScreenX(c.baseX);
+    const baseY = worldToScreenY(c.baseY);
+    const end = chainEnd(c);
+    const endX = worldToScreenX(end.x);
+    const endY = worldToScreenY(end.y);
+
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // links
+    ctx.globalAlpha = 0.7;
+    const steps = Math.max(6, Math.floor(c.length / 14));
+    for (let i=1;i<=steps;i++){
+      const t = i / steps;
+      const lx = baseX + (endX - baseX) * t;
+      const ly = baseY + (endY - baseY) * t;
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, 6, 3, 0, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // bob
+    ctx.fillStyle = "#e5e7eb";
+    ctx.beginPath();
+    ctx.arc(endX, endY, 6, 0, Math.PI*2);
+    ctx.fill();
+  }
+
   function drawEnemy(e){
     const x = worldToScreenX(e.x);
     const y = worldToScreenY(e.y);
@@ -1177,12 +1318,7 @@
 
     // trail particles when moving fast
     if (Math.abs(player.vx) > 6 && player.onGround){
-      const trail = trails.find(t => t.id === playerCosmetics.trail) || trails[0];
-      if (trail.kind === "trail"){
-        spawnParticles(player.x + player.w/2, player.y + player.h, 1, "trail", trail.color);
-      } else {
-        spawnParticles(player.x + player.w/2, player.y + player.h, 1, "dust");
-      }
+      spawnParticles(player.x + player.w/2, player.y + player.h, 1, "dust");
     }
   }
 
@@ -1212,7 +1348,29 @@
         ctx.fillRect(sx, sy, 3, 3);
       } else if (p.kind === "trail"){
         ctx.fillStyle = p.color || "#94a3b8";
-        ctx.fillRect(sx, sy, 3, 3);
+        ctx.fillRect(sx, sy, 4, 2);
+      } else if (p.kind === "ruby"){
+        const size = p.size || 4;
+        ctx.fillStyle = p.color || "#f43f5e";
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - size);
+        ctx.lineTo(sx + size, sy);
+        ctx.lineTo(sx, sy + size);
+        ctx.lineTo(sx - size, sy);
+        ctx.closePath();
+        ctx.fill();
+        if (p.color2){
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = p.color2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy - size*0.55);
+          ctx.lineTo(sx + size*0.55, sy);
+          ctx.lineTo(sx, sy + size*0.55);
+          ctx.lineTo(sx - size*0.55, sy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = a;
+        }
       } else {
         ctx.fillStyle = "#94a3b8";
         ctx.fillRect(sx, sy, 2, 2);
@@ -1301,31 +1459,100 @@
     if (state.paused) return;
 
     if (player.respawnLock > 0) player.respawnLock--;
+    if (player.chainCooldown > 0) player.chainCooldown--;
+
+    // update chains (swing)
+    for (const c of L._chains || []){
+      const damp = (player.grabbed >= 0) ? CHAIN_DAMP_GRAB : CHAIN_DAMP_FREE;
+      c.avel += (-CHAIN_G * Math.sin(c.angle));
+      c.avel *= damp;
+      c.avel = clamp(c.avel, -CHAIN_MAX_AVEL, CHAIN_MAX_AVEL);
+      c.angle += c.avel;
+      if (c.angle > CHAIN_MAX_ANGLE){
+        c.angle = CHAIN_MAX_ANGLE;
+        c.avel *= -0.4;
+      }
+      if (c.angle < -CHAIN_MAX_ANGLE){
+        c.angle = -CHAIN_MAX_ANGLE;
+        c.avel *= -0.4;
+      }
+    }
 
     // input
     const left = keys.has("a") || keys.has("arrowleft");
     const right = keys.has("d") || keys.has("arrowright");
     const jump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
+    const down = keys.has("s") || keys.has("arrowdown");
 
     if (jump) player.jumpBuf = 8;
     else player.jumpBuf = Math.max(0, player.jumpBuf - 1);
 
-    if (left) player.vx -= MOVE;
-    if (right) player.vx += MOVE;
+    if (player.grabbed < 0 && player.chainCooldown === 0){
+      if (left) player.vx -= MOVE;
+      if (right) player.vx += MOVE;
+    }
 
-    // gravity
-    player.vy += G;
+    if (player.grabbed >= 0){
+      const chain = L._chains[player.grabbed];
+      if (chain){
+        // pump swing (limited)
+        const gain = 1 - Math.min(1, Math.abs(chain.angle) / CHAIN_MAX_ANGLE);
+        if (left) chain.avel -= CHAIN_INPUT * gain;
+        if (right) chain.avel += CHAIN_INPUT * gain;
+        chain.avel = clamp(chain.avel, -CHAIN_MAX_AVEL, CHAIN_MAX_AVEL);
+        if (keys.has("w")) player.grabT = Math.max(0.2, player.grabT - 0.01);
+        if (down) player.grabT = Math.min(1, player.grabT + 0.01);
 
-    // friction
-    player.vx *= player.onGround ? FRICTION_GROUND : FRICTION_AIR;
+        const dirX = Math.sin(chain.angle);
+        const dirY = Math.cos(chain.angle);
+        const px = chain.baseX + dirX * (chain.length * player.grabT);
+        const py = chain.baseY + dirY * (chain.length * player.grabT);
+        player.x = px - player.w/2;
+        player.y = py - player.h/2;
+        player.vx = 0;
+        player.vy = 0;
 
-    // clamp
-    player.vx = clamp(player.vx, -MAX_VX, MAX_VX);
-    player.vy = clamp(player.vy, -MAX_VY, MAX_VY);
+        if (jump){
+          // release with swing momentum
+          const tangential = chain.avel * chain.length;
+          const tx = Math.cos(chain.angle);
+          const ty = -Math.sin(chain.angle);
+          const inputKick = (right ? 1 : 0) - (left ? 1 : 0);
+          player.grabbed = -1;
+          player.chainCooldown = 10;
+          player.vx = tx * (tangential + CHAIN_RELEASE_BOOST) + inputKick * 4;
+          player.vy = ty * (tangential + CHAIN_RELEASE_BOOST) - JUMP * 0.65;
+        }
+        player.jumpBuf = 0;
+      } else {
+        player.grabbed = -1;
+      }
+    } else {
+      // gravity
+      player.vy += G;
 
-    // move
-    player.x += player.vx;
-    player.y += player.vy;
+      // friction
+      player.vx *= player.onGround ? FRICTION_GROUND : FRICTION_AIR;
+
+      // clamp
+      player.vx = clamp(player.vx, -MAX_VX, MAX_VX);
+      player.vy = clamp(player.vy, -MAX_VY, MAX_VY);
+
+      // move
+      player.x += player.vx;
+      player.y += player.vy;
+    }
+
+    // cosmetic trails (more visible)
+    const trail = trails.find(t => t.id === playerCosmetics.trail) || trails[0];
+    if (trail.kind !== "none" && Math.abs(player.vx) > 1){
+      if (Math.random() < 0.7){
+        const px = player.x + player.w/2;
+        const py = player.y + player.h - 4;
+        const meta = { color2: trail.color2, size: trail.size };
+        spawnParticles(px, py, trail.kind === "ruby" ? 1 : 2, trail.kind, trail.color, meta);
+      }
+    }
 
     // world bounds
     player.x = clamp(player.x, 0, L.worldW - player.w);
@@ -1353,6 +1580,50 @@
       if (aabb(player, r)){
         loseLife("Шипы!");
         return;
+      }
+    }
+
+    // rings (bounce)
+    for (const r of L._rings || []){
+      if (r.cooldown > 0) { r.cooldown--; continue; }
+      const dx = (player.x + player.w/2) - r.x;
+      const dy = (player.y + player.h/2) - r.y;
+      const dist = Math.hypot(dx, dy);
+      const rad = (r.r || 16) + 6;
+      if (dist <= rad){
+        player.vy = -JUMP * 1.25;
+        player.vx += (dx > 0 ? 1 : -1) * 0.5;
+        r.cooldown = 25;
+        state.score += 5;
+        spawnParticles(r.x, r.y, 20, "win");
+      }
+    }
+
+    // chains (grab)
+    if (player.grabbed < 0){
+      const chains = L._chains || [];
+      for (let i=0;i<chains.length;i++){
+        const c = chains[i];
+        const end = chainEnd(c);
+        const px = player.x + player.w/2;
+        const py = player.y + player.h/2;
+        const vx = end.x - c.baseX;
+        const vy = end.y - c.baseY;
+        const len2 = vx*vx + vy*vy || 1;
+        let t = ((px - c.baseX) * vx + (py - c.baseY) * vy) / len2;
+        t = clamp(t, 0.15, 1);
+        const cx = c.baseX + vx * t;
+        const cy = c.baseY + vy * t;
+        const dist = Math.hypot(px - cx, py - cy);
+        const wantsGrab = !down && (!player.onGround || jump || keys.has("w") || keys.has("arrowup"));
+        if (dist <= 24 && wantsGrab){
+          player.grabbed = i;
+          player.grabT = t;
+          c.avel += player.vx * 0.002; // add momentum
+          player.vx = 0;
+          player.vy = 0;
+          break;
+        }
       }
     }
 
@@ -1450,6 +1721,10 @@
 
     // platforms
     for (const p of L.platforms) drawPlatform(p);
+
+    // rings + chains
+    for (const r of (L._rings || [])) drawRing(r);
+    for (const c of (L._chains || [])) drawChain(c);
 
     // spikes
     for (const s of L.spikes) drawSpikes(s);
