@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Platformer — 5 Levels</title>
+  <title>Platformer — 10 Levels</title>
   <style>
     :root{
       --bg1:#070a12; --bg2:#0b1630; --panel:#0b1220cc; --stroke:#2a3b63;
@@ -74,12 +74,12 @@
         <div class="dot"></div>
         <div>
           <div style="font-weight:800; letter-spacing:.2px;">Mini Platformer</div>
-          <div class="meta">5 уровней • монеты • шипы • камера</div>
+          <div class="meta">10 уровней • монеты • шипы • враги • камера</div>
         </div>
       </div>
 
       <div class="hud" id="hud">
-        <div class="pill">🗺️ Уровень: <b id="lvl">1</b>/5</div>
+        <div class="pill">🗺️ Уровень: <b id="lvl">1</b>/10</div>
         <div class="pill">🪙 Монеты: <b id="coins">0</b>/<span id="coinsTotal">0</span></div>
         <div class="pill">⭐ Очки: <b id="score">0</b></div>
         <div class="pill">❤️ Жизни: <b id="lives">3</b></div>
@@ -154,7 +154,7 @@
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
 
-  // Level generator (5 levels)
+  // Level generator (10 levels)
   // World is wider than canvas -> camera moves.
   const levels = [
     // Level 1 (easy)
@@ -178,6 +178,9 @@
       coins: [
         {x:300,y:380},{x:580,y:340},{x:860,y:300},
         {x:1200,y:340},{x:1500,y:290},{x:1790,y:370}
+      ],
+      enemies: [
+        {type:"patrol", x:480, y:472, w:36, h:28, minX:380, maxX:720, speed:1.2},
       ]
     },
 
@@ -206,6 +209,10 @@
         {x:260,y:370},{x:500,y:290},{x:760,y:230},
         {x:1010,y:280},{x:1300,y:340},{x:1600,y:290},
         {x:1890,y:240},{x:2140,y:300}
+      ],
+      enemies: [
+        {type:"patrol", x:980, y:472, w:36, h:28, minX:860, maxX:1160, speed:1.35},
+        {type:"chaser", x:1780, y:472, w:34, h:26, aggro:520, speed:0.25, maxSpeed:2.6},
       ]
     },
 
@@ -234,6 +241,10 @@
         {x:270,y:370},{x:550,y:310},{x:830,y:250},
         {x:1110,y:190},{x:1390,y:240},{x:1670,y:300},
         {x:1950,y:240},{x:2250,y:180},{x:2350,y:180}
+      ],
+      enemies: [
+        {type:"patrol", x:620, y:472, w:36, h:28, minX:520, maxX:880, speed:1.55},
+        {type:"patrol", x:1500, y:472, w:36, h:28, minX:1380, maxX:1780, speed:1.4},
       ]
     },
 
@@ -268,10 +279,14 @@
         {x:800,y:320},{x:980,y:380},
         {x:1210,y:340},{x:1450,y:290},{x:1690,y:240},
         {x:1930,y:290},{x:2170,y:340},{x:2410,y:380}
+      ],
+      enemies: [
+        {type:"patrol", x:1180, y:472, w:36, h:28, minX:1000, maxX:1340, speed:1.6},
+        {type:"chaser", x:2000, y:472, w:34, h:26, aggro:560, speed:0.28, maxSpeed:2.8},
       ]
     },
 
-    // Level 5 (final)
+    // Level 5
     {
       worldW: 3000,
       spawn: { x: 80, y: 360 },
@@ -300,6 +315,190 @@
         {x:280,y:370},{x:560,y:320},{x:810,y:270},{x:1050,y:220},
         {x:1290,y:270},{x:1530,y:320},{x:1770,y:370},
         {x:2070,y:320},{x:2330,y:260},{x:2600,y:200},{x:2700,y:200}
+      ],
+      enemies: [
+        {type:"patrol", x:880, y:472, w:36, h:28, minX:760, maxX:1120, speed:1.7},
+        {type:"patrol", x:1760, y:472, w:36, h:28, minX:1600, maxX:2100, speed:1.8},
+      ]
+    },
+
+    // Level 6 (long sprint)
+    {
+      worldW: 3200,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 3040, y: 320, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:3200,h:60},
+        {x:260,y:420,w:180,h:18},
+        {x:540,y:380,w:180,h:18},
+        {x:820,y:340,w:180,h:18},
+        {x:1100,y:300,w:180,h:18},
+        {x:1380,y:340,w:180,h:18},
+        {x:1660,y:380,w:180,h:18},
+        {x:1940,y:420,w:180,h:18},
+        {x:2220,y:380,w:180,h:18},
+        {x:2500,y:340,w:180,h:18},
+        {x:2780,y:300,w:180,h:18},
+      ],
+      spikes: [
+        {x:420,y:482,w:140,h:18},
+        {x:980,y:482,w:180,h:18},
+        {x:1540,y:482,w:200,h:18},
+        {x:2140,y:482,w:200,h:18},
+        {x:2660,y:482,w:220,h:18},
+      ],
+      coins: [
+        {x:300,y:380},{x:580,y:340},{x:860,y:300},
+        {x:1140,y:260},{x:1420,y:300},{x:1700,y:340},
+        {x:1980,y:380},{x:2260,y:340},{x:2540,y:300},{x:2820,y:260}
+      ],
+      enemies: [
+        {type:"patrol", x:520, y:472, w:36, h:28, minX:380, maxX:720, speed:1.6},
+        {type:"chaser", x:1460, y:472, w:34, h:26, aggro:620, speed:0.3, maxSpeed:3.0},
+        {type:"patrol", x:2300, y:472, w:36, h:28, minX:2140, maxX:2520, speed:1.8},
+      ]
+    },
+
+    // Level 7 (gaps + mid air)
+    {
+      worldW: 3300,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 3140, y: 220, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:3300,h:60},
+        {x:260,y:430,w:160,h:18},
+        {x:520,y:370,w:160,h:18},
+        {x:780,y:310,w:160,h:18},
+        {x:1040,y:370,w:160,h:18},
+        {x:1300,y:430,w:160,h:18},
+        {x:1620,y:380,w:180,h:18},
+        {x:1900,y:320,w:180,h:18},
+        {x:2180,y:260,w:180,h:18},
+        {x:2460,y:320,w:180,h:18},
+        {x:2740,y:380,w:180,h:18},
+        {x:3020,y:320,w:200,h:18},
+      ],
+      spikes: [
+        {x:360,y:482,w:100,h:18},
+        {x:1180,y:482,w:180,h:18},
+        {x:1760,y:482,w:200,h:18},
+        {x:2400,y:482,w:200,h:18},
+      ],
+      coins: [
+        {x:300,y:390},{x:560,y:330},{x:820,y:270},
+        {x:1080,y:330},{x:1340,y:390},{x:1660,y:340},
+        {x:1940,y:280},{x:2220,y:220},{x:2500,y:280},{x:2780,y:340},{x:3080,y:280}
+      ],
+      enemies: [
+        {type:"patrol", x:1080, y:472, w:36, h:28, minX:940, maxX:1240, speed:1.7},
+        {type:"chaser", x:2060, y:472, w:34, h:26, aggro:700, speed:0.32, maxSpeed:3.2},
+        {type:"patrol", x:2760, y:472, w:36, h:28, minX:2600, maxX:2960, speed:1.9},
+      ]
+    },
+
+    // Level 8 (fast enemy lines)
+    {
+      worldW: 3400,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 3240, y: 300, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:3400,h:60},
+        {x:280,y:420,w:200,h:18},
+        {x:600,y:360,w:200,h:18},
+        {x:920,y:300,w:200,h:18},
+        {x:1240,y:360,w:200,h:18},
+        {x:1560,y:420,w:200,h:18},
+        {x:1880,y:360,w:200,h:18},
+        {x:2200,y:300,w:200,h:18},
+        {x:2520,y:360,w:200,h:18},
+        {x:2840,y:420,w:200,h:18},
+      ],
+      spikes: [
+        {x:520,y:482,w:160,h:18},
+        {x:1420,y:482,w:220,h:18},
+        {x:2320,y:482,w:220,h:18},
+        {x:3000,y:482,w:260,h:18},
+      ],
+      coins: [
+        {x:320,y:390},{x:640,y:330},{x:960,y:270},{x:1280,y:330},
+        {x:1600,y:390},{x:1920,y:330},{x:2240,y:270},{x:2560,y:330},{x:2880,y:390}
+      ],
+      enemies: [
+        {type:"patrol", x:740, y:472, w:36, h:28, minX:620, maxX:980, speed:2.1},
+        {type:"patrol", x:1700, y:472, w:36, h:28, minX:1500, maxX:1980, speed:2.0},
+        {type:"chaser", x:2520, y:472, w:34, h:26, aggro:760, speed:0.34, maxSpeed:3.4},
+      ]
+    },
+
+    // Level 9 (hard)
+    {
+      worldW: 3600,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 3440, y: 180, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:3600,h:60},
+        {x:260,y:420,w:200,h:18},
+        {x:560,y:350,w:200,h:18},
+        {x:860,y:280,w:200,h:18},
+        {x:1160,y:220,w:200,h:18},
+        {x:1460,y:280,w:200,h:18},
+        {x:1760,y:350,w:200,h:18},
+        {x:2060,y:420,w:200,h:18},
+        {x:2360,y:350,w:200,h:18},
+        {x:2660,y:280,w:200,h:18},
+        {x:2960,y:220,w:200,h:18},
+        {x:3260,y:280,w:200,h:18},
+      ],
+      spikes: [
+        {x:480,y:482,w:160,h:18},
+        {x:1080,y:482,w:220,h:18},
+        {x:1740,y:482,w:240,h:18},
+        {x:2360,y:482,w:240,h:18},
+        {x:2960,y:482,w:240,h:18},
+      ],
+      coins: [
+        {x:300,y:390},{x:600,y:320},{x:900,y:250},
+        {x:1200,y:190},{x:1500,y:250},{x:1800,y:320},
+        {x:2100,y:390},{x:2400,y:320},{x:2700,y:250},{x:3000,y:190},{x:3300,y:250}
+      ],
+      enemies: [
+        {type:"patrol", x:980, y:472, w:36, h:28, minX:860, maxX:1220, speed:2.2},
+        {type:"patrol", x:1880, y:472, w:36, h:28, minX:1680, maxX:2100, speed:2.1},
+        {type:"chaser", x:2600, y:472, w:34, h:26, aggro:820, speed:0.36, maxSpeed:3.6},
+      ]
+    },
+
+    // Level 10 (boss)
+    {
+      worldW: 3800,
+      spawn: { x: 80, y: 360 },
+      goal:  { x: 3640, y: 320, w: 26, h: 80 },
+      platforms: [
+        {x:0,y:500,w:3800,h:60},
+        {x:260,y:420,w:220,h:18},
+        {x:600,y:360,w:200,h:18},
+        {x:940,y:300,w:200,h:18},
+        {x:1280,y:360,w:200,h:18},
+        {x:1620,y:420,w:220,h:18},
+        {x:1980,y:360,w:200,h:18},
+        {x:2340,y:300,w:200,h:18},
+        {x:2700,y:360,w:200,h:18},
+        {x:3060,y:420,w:220,h:18},
+      ],
+      spikes: [
+        {x:520,y:482,w:220,h:18},
+        {x:1180,y:482,w:260,h:18},
+        {x:1900,y:482,w:260,h:18},
+        {x:2640,y:482,w:260,h:18},
+        {x:3320,y:482,w:260,h:18},
+      ],
+      coins: [
+        {x:320,y:390},{x:640,y:330},{x:980,y:270},{x:1320,y:330},
+        {x:1660,y:390},{x:2020,y:330},{x:2380,y:270},{x:2740,y:330},{x:3100,y:390},{x:3400,y:330}
+      ],
+      enemies: [
+        {type:"patrol", x:860, y:472, w:36, h:28, minX:700, maxX:1080, speed:2.0},
+        {type:"boss", x:1800, y:440, w:80, h:60, aggro:1400, speed:0.4, maxSpeed:4.8},
       ]
     }
   ];
@@ -672,6 +871,46 @@
     ctx.globalAlpha = 1;
   }
 
+  function drawEnemy(e){
+    const x = worldToScreenX(e.x);
+    const y = worldToScreenY(e.y);
+    const w = e.w;
+    const h = e.h;
+    const isBoss = e.type === "boss";
+
+    // shadow
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(x + w/2, y + h + 6, Math.max(10, w*0.35), 6, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // body
+    const grad = ctx.createLinearGradient(0, y, 0, y + h);
+    if (isBoss){
+      grad.addColorStop(0, "#ef4444");
+      grad.addColorStop(1, "#7f1d1d");
+    } else {
+      grad.addColorStop(0, "#60a5fa");
+      grad.addColorStop(1, "#1e3a8a");
+    }
+    ctx.fillStyle = grad;
+    drawRoundedRect(x, y, w, h, isBoss ? 12 : 8);
+
+    // eyes
+    ctx.fillStyle = "#0f172a";
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(x + (isBoss ? 18 : 10), y + (isBoss ? 18 : 10), 6, 6);
+    ctx.fillRect(x + (isBoss ? 40 : 20), y + (isBoss ? 18 : 10), 6, 6);
+    ctx.globalAlpha = 1;
+
+    // outline
+    ctx.strokeStyle = isBoss ? "#fecaca" : "#93c5fd";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x+1, y+1, w-2, h-2);
+  }
+
   function drawCoin(c){
     const x = worldToScreenX(c.x);
     const y = worldToScreenY(c.y);
@@ -940,6 +1179,45 @@
       }
     }
 
+    // enemies movement
+    for (const e of L._enemies){
+      if (e.type === "patrol"){
+        if (e.dir === undefined) e.dir = 1;
+        e.vx = e.speed ?? 1.2;
+        e.x += e.vx * e.dir;
+        if (e.minX !== undefined && e.x < e.minX){
+          e.x = e.minX;
+          e.dir = 1;
+        }
+        if (e.maxX !== undefined && e.x + e.w > e.maxX){
+          e.x = e.maxX - e.w;
+          e.dir = -1;
+        }
+      } else {
+        const dx = (player.x + player.w/2) - (e.x + e.w/2);
+        const aggro = e.aggro ?? 600;
+        const accel = e.speed ?? 0.25;
+        const maxS = e.maxSpeed ?? 3.0;
+        if (Math.abs(dx) <= aggro){
+          e.vx = (e.vx ?? 0) + Math.sign(dx) * accel;
+        } else {
+          e.vx = (e.vx ?? 0) * 0.85;
+        }
+        e.vx = clamp(e.vx, -maxS, maxS);
+        e.x += e.vx;
+      }
+      e.x = clamp(e.x, 0, L.worldW - e.w);
+    }
+
+    // enemy collision
+    for (const e of L._enemies){
+      const r = { x:e.x, y:e.y, w:e.w, h:e.h };
+      if (aabb(player, r)){
+        loseLife(e.type === "boss" ? "Босс!" : "Враг!");
+        return;
+      }
+    }
+
     // coins
     for (const c of L._coins){
       if (c.taken) continue;
@@ -1003,6 +1281,9 @@
     for (const c of L._coins){
       if (!c.taken) drawCoin(c);
     }
+
+    // enemies
+    for (const e of L._enemies) drawEnemy(e);
 
     // goal (open when all coins taken)
     drawGoal(L.goal, allCoinsTaken());
