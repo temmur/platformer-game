@@ -65,6 +65,75 @@
       font-size:12px;
     }
     .right{ opacity:.9; }
+
+    .menu-btn{
+      padding:6px 10px;
+      border-radius:10px;
+      border:1px solid #2b3a55;
+      background:#0b1220cc;
+      color:#e5e7eb;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .menu-btn:hover{ border-color:#4f6aa0; }
+
+    .menu-overlay{
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background: radial-gradient(900px circle at 20% 0%, #243b7a55, transparent 55%),
+                  radial-gradient(900px circle at 80% 0%, #15b9813b, transparent 55%),
+                  linear-gradient(180deg, #050814cc, #070a12ee);
+      backdrop-filter: blur(6px);
+      z-index: 10;
+    }
+    .menu-card{
+      width:min(920px, 92vw);
+      padding:22px;
+      border-radius:18px;
+      border:1px solid #2b3a55;
+      background: #0b1220ee;
+      box-shadow: 0 30px 120px rgba(0,0,0,.55);
+    }
+    .menu-grid{
+      display:grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap:18px;
+    }
+    .menu-title{
+      font-size:28px; font-weight:900; letter-spacing:.2px;
+      margin-bottom:6px;
+    }
+    .menu-sub{
+      color:var(--muted); margin-bottom:16px;
+    }
+    .menu-actions{
+      display:flex; gap:10px; flex-wrap:wrap;
+    }
+    .action{
+      padding:10px 14px;
+      border-radius:12px;
+      border:1px solid #2b3a55;
+      background:#101a33;
+      color:#e5e7eb;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .action.primary{ background:#1d4ed8; border-color:#1d4ed8; }
+    .action.warn{ background:#7c2d12; border-color:#7c2d12; }
+    .shop{
+      border:1px solid #2b3a55;
+      border-radius:14px;
+      padding:12px;
+      background:#0b1220aa;
+    }
+    .shop h3{ margin:6px 0 10px 0; font-size:16px; }
+    .shop-list{ display:flex; gap:8px; flex-wrap:wrap; }
+    .item{
+      padding:8px 10px; border-radius:10px; border:1px solid #2b3a55;
+      background:#0b1220; color:#e5e7eb; font-size:13px; cursor:pointer;
+    }
+    .item.owned{ border-color:#22c55e; }
+    .item.active{ background:#22c55e; color:#0b1220; border-color:#22c55e; }
+    .item.locked{ opacity:.7; }
   </style>
 </head>
 <body>
@@ -81,8 +150,10 @@
       <div class="hud" id="hud">
         <div class="pill">🗺️ Уровень: <b id="lvl">1</b>/10</div>
         <div class="pill">🪙 Монеты: <b id="coins">0</b>/<span id="coinsTotal">0</span></div>
+        <div class="pill">💰 Банк: <b id="bank">0</b></div>
         <div class="pill">⭐ Очки: <b id="score">0</b></div>
         <div class="pill">❤️ Жизни: <b id="lives">3</b></div>
+        <button class="menu-btn" id="menuBtn">Меню</button>
       </div>
     </div>
 
@@ -97,6 +168,28 @@
     </div>
   </div>
 
+  <div class="menu-overlay" id="menu">
+    <div class="menu-card">
+      <div class="menu-grid">
+        <div>
+          <div class="menu-title">Главное меню</div>
+          <div class="menu-sub">Монеты: <b id="menuBank">0</b> • Прогресс: <b id="menuProgress">0</b>/10</div>
+          <div class="menu-actions">
+            <button class="action primary" id="continueBtn">Продолжить</button>
+            <button class="action" id="startBtn">Начать заново</button>
+            <button class="action warn" id="closeMenuBtn">Вернуться в игру</button>
+          </div>
+        </div>
+        <div class="shop">
+          <h3>Скины (персонаж)</h3>
+          <div class="shop-list" id="shopSkins"></div>
+          <h3>Следы (эффекты)</h3>
+          <div class="shop-list" id="shopTrails"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script>
 (() => {
   const canvas = document.getElementById("game");
@@ -108,6 +201,17 @@
   const elCoinsTotal = document.getElementById("coinsTotal");
   const elScore = document.getElementById("score");
   const elLives = document.getElementById("lives");
+  const elBank = document.getElementById("bank");
+
+  const menu = document.getElementById("menu");
+  const menuBank = document.getElementById("menuBank");
+  const menuProgress = document.getElementById("menuProgress");
+  const continueBtn = document.getElementById("continueBtn");
+  const startBtn = document.getElementById("startBtn");
+  const closeMenuBtn = document.getElementById("closeMenuBtn");
+  const menuBtn = document.getElementById("menuBtn");
+  const shopSkins = document.getElementById("shopSkins");
+  const shopTrails = document.getElementById("shopTrails");
 
   // Input
   const keys = new Set();
@@ -132,7 +236,7 @@
 
   // Particles
   const particles = [];
-  function spawnParticles(x, y, n, kind="coin") {
+  function spawnParticles(x, y, n, kind="coin", color=null) {
     for (let i=0;i<n;i++){
       const a = Math.random()*Math.PI*2;
       const s = 1.5 + Math.random()*3.2;
@@ -141,7 +245,8 @@
         vx: Math.cos(a)*s,
         vy: Math.sin(a)*s - 2.5,
         life: 32 + Math.random()*18,
-        kind
+        kind,
+        color
       });
     }
   }
@@ -509,6 +614,7 @@
     score: 0,
     lives: 3,
     paused: false,
+    mode: "menu",
     message: null,
     messageTimer: 0,
     coinsCollected: 0,
@@ -519,6 +625,63 @@
       transitioning: false,
       nextTimer: null,
   };
+
+  // Currency + cosmetics
+  const STORAGE = {
+    bank: "mp_bank",
+    skin: "mp_skin",
+    trail: "mp_trail",
+    ownedSkins: "mp_ownedSkins",
+    ownedTrails: "mp_ownedTrails",
+    savedLevel: "mp_savedLevel",
+    savedScore: "mp_savedScore",
+    savedLives: "mp_savedLives"
+  };
+
+  const skins = [
+    { id:"classic", name:"Классик", price:0, top:"#fbbf24", bottom:"#f59e0b", eye:"#111827" },
+    { id:"neon", name:"Неон", price:80, top:"#22d3ee", bottom:"#06b6d4", eye:"#0f172a" },
+    { id:"mint", name:"Мята", price:120, top:"#34d399", bottom:"#10b981", eye:"#052e2b" },
+    { id:"dusk", name:"Сумрак", price:150, top:"#a78bfa", bottom:"#7c3aed", eye:"#0f172a" },
+  ];
+  const trails = [
+    { id:"none", name:"Без следа", price:0, kind:"none", color:"#94a3b8" },
+    { id:"spark", name:"Искры", price:90, kind:"trail", color:"#fbbf24" },
+    { id:"ember", name:"Угли", price:120, kind:"trail", color:"#fb7185" },
+    { id:"azure", name:"Азур", price:150, kind:"trail", color:"#60a5fa" },
+  ];
+
+  function loadJSON(key, fallback){
+    try{
+      const v = localStorage.getItem(key);
+      return v ? JSON.parse(v) : fallback;
+    }catch{
+      return fallback;
+    }
+  }
+  function saveJSON(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+
+  const playerCosmetics = {
+    skin: localStorage.getItem(STORAGE.skin) || "classic",
+    trail: localStorage.getItem(STORAGE.trail) || "none",
+  };
+  const ownedSkins = new Set(loadJSON(STORAGE.ownedSkins, ["classic"]));
+  const ownedTrails = new Set(loadJSON(STORAGE.ownedTrails, ["none"]));
+  let bank = Number(localStorage.getItem(STORAGE.bank) || 0);
+
+  function saveBank(){
+    localStorage.setItem(STORAGE.bank, String(bank));
+    elBank.textContent = String(bank);
+  }
+
+  function saveProgress(){
+    localStorage.setItem(STORAGE.savedLevel, String(state.levelIndex));
+    localStorage.setItem(STORAGE.savedScore, String(state.score));
+    localStorage.setItem(STORAGE.savedLives, String(state.lives));
+  }
+  function hasProgress(){
+    return localStorage.getItem(STORAGE.savedLevel) !== null;
+  }
 
   // Player
   const player = {
@@ -625,6 +788,7 @@
     elCoinsTotal.textContent = String(state.coinsTotal);
     elScore.textContent = String(state.score);
     elLives.textContent = String(state.lives);
+    elBank.textContent = String(bank);
   }
 
   function showMessage(text, frames=120){
@@ -731,6 +895,8 @@
     coin.taken = true;
     state.coinsCollected += 1;
     state.score += 10;
+    bank += 1;
+    saveBank();
     updateHUD();
     spawnParticles(coin.x, coin.y, 18, "coin");
   }
@@ -979,6 +1145,7 @@
   function drawPlayer(){
     const x = worldToScreenX(player.x);
     const y = worldToScreenY(player.y);
+    const skin = skins.find(s => s.id === playerCosmetics.skin) || skins[0];
 
     // shadow
     ctx.globalAlpha = 0.28;
@@ -990,13 +1157,13 @@
 
     // body
     const grad = ctx.createLinearGradient(0,y,0,y+player.h);
-    grad.addColorStop(0, "#fbbf24");
-    grad.addColorStop(1, "#f59e0b");
+    grad.addColorStop(0, skin.top);
+    grad.addColorStop(1, skin.bottom);
     ctx.fillStyle = grad;
     drawRoundedRect(x, y, player.w, player.h, 10);
 
     // face
-    ctx.fillStyle = "#111827";
+    ctx.fillStyle = skin.eye;
     ctx.globalAlpha = 0.85;
     ctx.fillRect(x+9, y+14, 6, 6);
     ctx.fillRect(x+19, y+14, 6, 6);
@@ -1010,7 +1177,12 @@
 
     // trail particles when moving fast
     if (Math.abs(player.vx) > 6 && player.onGround){
-      spawnParticles(player.x + player.w/2, player.y + player.h, 1, "dust");
+      const trail = trails.find(t => t.id === playerCosmetics.trail) || trails[0];
+      if (trail.kind === "trail"){
+        spawnParticles(player.x + player.w/2, player.y + player.h, 1, "trail", trail.color);
+      } else {
+        spawnParticles(player.x + player.w/2, player.y + player.h, 1, "dust");
+      }
     }
   }
 
@@ -1037,6 +1209,9 @@
         ctx.fillRect(sx, sy, 3, 3);
       } else if (p.kind === "win"){
         ctx.fillStyle = "#22c55e";
+        ctx.fillRect(sx, sy, 3, 3);
+      } else if (p.kind === "trail"){
+        ctx.fillStyle = p.color || "#94a3b8";
         ctx.fillRect(sx, sy, 3, 3);
       } else {
         ctx.fillStyle = "#94a3b8";
@@ -1095,6 +1270,8 @@
   // Update
   function step(){
     const L = levels[state.levelIndex];
+
+    if (state.mode !== "game") return;
 
     // pause toggle
     if (keys.has("p")) {
@@ -1313,8 +1490,100 @@
     requestAnimationFrame(loop);
   }
 
+  function openMenu(){
+    saveProgress();
+    state.mode = "menu";
+    menu.style.display = "flex";
+    updateMenuUI();
+  }
+  function closeMenu(){
+    state.mode = "game";
+    menu.style.display = "none";
+  }
+  function updateMenuUI(){
+    menuBank.textContent = String(bank);
+    const savedLevel = Number(localStorage.getItem(STORAGE.savedLevel) || state.levelIndex);
+    menuProgress.textContent = String(savedLevel + 1);
+    continueBtn.style.display = hasProgress() ? "inline-block" : "none";
+    renderShop();
+  }
+
+  function renderShop(){
+    shopSkins.innerHTML = "";
+    for (const s of skins){
+      const owned = ownedSkins.has(s.id);
+      const active = playerCosmetics.skin === s.id;
+      const btn = document.createElement("button");
+      btn.className = `item ${owned ? "owned" : "locked"} ${active ? "active" : ""}`;
+      btn.textContent = owned ? (active ? `✓ ${s.name}` : s.name) : `${s.name} • ${s.price}🪙`;
+      btn.onclick = () => {
+        if (!owned){
+          if (bank < s.price) return;
+          bank -= s.price; saveBank();
+          ownedSkins.add(s.id);
+          saveJSON(STORAGE.ownedSkins, Array.from(ownedSkins));
+        }
+        playerCosmetics.skin = s.id;
+        localStorage.setItem(STORAGE.skin, s.id);
+        renderShop();
+      };
+      shopSkins.appendChild(btn);
+    }
+
+    shopTrails.innerHTML = "";
+    for (const t of trails){
+      const owned = ownedTrails.has(t.id);
+      const active = playerCosmetics.trail === t.id;
+      const btn = document.createElement("button");
+      btn.className = `item ${owned ? "owned" : "locked"} ${active ? "active" : ""}`;
+      btn.textContent = owned ? (active ? `✓ ${t.name}` : t.name) : `${t.name} • ${t.price}🪙`;
+      btn.onclick = () => {
+        if (!owned){
+          if (bank < t.price) return;
+          bank -= t.price; saveBank();
+          ownedTrails.add(t.id);
+          saveJSON(STORAGE.ownedTrails, Array.from(ownedTrails));
+        }
+        playerCosmetics.trail = t.id;
+        localStorage.setItem(STORAGE.trail, t.id);
+        renderShop();
+      };
+      shopTrails.appendChild(btn);
+    }
+  }
+
+  // Menu controls
+  menuBtn.addEventListener("click", openMenu);
+  closeMenuBtn.addEventListener("click", () => {
+    if (state.mode === "menu") closeMenu();
+  });
+  continueBtn.addEventListener("click", () => {
+    const savedLevel = Number(localStorage.getItem(STORAGE.savedLevel) || 0);
+    const savedScore = Number(localStorage.getItem(STORAGE.savedScore) || 0);
+    const savedLives = Number(localStorage.getItem(STORAGE.savedLives) || 3);
+    state.score = savedScore;
+    state.lives = savedLives;
+    loadLevel(savedLevel);
+    closeMenu();
+  });
+  startBtn.addEventListener("click", () => {
+    state.score = 0;
+    state.lives = 3;
+    loadLevel(0);
+    closeMenu();
+  });
+
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape"){
+      if (state.mode === "game") openMenu();
+      else closeMenu();
+    }
+  });
+
   // Start
+  saveBank();
   loadLevel(0);
+  openMenu();
   loop();
 })();
 </script>
